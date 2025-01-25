@@ -15,7 +15,7 @@ const __dirname = dirname(__filename);
 
 const corsOptions = {
   origin: [
-    process.env.FRONTEND_URL || 'https://summarizer-012525-new-8fev.vercel.app/',
+    process.env.FRONTEND_URL || 'https://summarizer-012525-new-8fev.vercel.app',
     'http://localhost:3000'
   ],
   methods: ['GET', 'POST', 'OPTIONS'],
@@ -27,8 +27,7 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-/// 012525 version 1 app.use(cors(corsOptions));
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Ensure temp directory exists
