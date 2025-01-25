@@ -86,6 +86,8 @@ const downloadAudio = async (url, outputPath) => {
 
     console.log('yt-dlp path:', ytDlpPath);
 
+    console.log('cookies path:', cookiesPath); // Add this log
+
     const yt = youtubeDl.create(ytDlpPath);
 
     await yt(url, {
