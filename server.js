@@ -15,7 +15,7 @@ const __dirname = dirname(__filename);
 
 const corsOptions = {
   origin: [
-    process.env.FRONTEND_URL || 'https://summarizer-012525-new.vercel.app/',
+    process.env.FRONTEND_URL || 'https://summarizer-012525-new-8fev.vercel.app/',
     'http://localhost:3000'
   ],
   methods: ['GET', 'POST', 'OPTIONS'],
@@ -75,7 +75,7 @@ const cleanup = async (filePath) => {
 // Improved audio download function using youtube-dl-exec
 const downloadAudio = async (url, outputPath) => {
   try {
-    const ytDlpPath = path.join(__dirname, 'bin', 'yt-dlp.exe');
+    const ytDlpPath = path.join(__dirname, 'bin', 'yt-dlp');
     
     // Ensure yt-dlp.exe exists in the expected path
     if (!fs.existsSync(ytDlpPath)) {
