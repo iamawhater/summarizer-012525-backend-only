@@ -76,6 +76,7 @@ const cleanup = async (filePath) => {
 const downloadAudio = async (url, outputPath) => {
   try {
     const ytDlpPath = path.join(__dirname, 'bin', 'yt-dlp');
+    const cookiesPath = path.join(__dirname, 'cookie.txt');
     
     if (!fs.existsSync(ytDlpPath)) {
       throw new Error('yt-dlp not found in bin directory. Please download it first.');
@@ -93,8 +94,7 @@ const downloadAudio = async (url, outputPath) => {
       noCheckCertificates: true,
       noWarnings: true,
       preferFreeFormats: true,
-      forceIpv4: true,
-      noPlaylist: true,
+      cookies: cookiesPath,
       addHeader: [
         'referer:youtube.com',
         'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
