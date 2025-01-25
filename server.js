@@ -93,7 +93,8 @@ const downloadAudio = async (url, outputPath) => {
       noCheckCertificates: true,
       noWarnings: true,
       preferFreeFormats: true,
-      cookiesFromBrowser: 'chrome',  // Add this line
+      forceIpv4: true,
+      noPlaylist: true,
       addHeader: [
         'referer:youtube.com',
         'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
