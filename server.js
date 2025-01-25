@@ -77,17 +77,14 @@ const downloadAudio = async (url, outputPath) => {
   try {
     const ytDlpPath = path.join(__dirname, 'bin', 'yt-dlp');
     
-    // Ensure yt-dlp.exe exists in the expected path
     if (!fs.existsSync(ytDlpPath)) {
-      throw new Error('yt-dlp.exe not found in bin directory. Please download it first.');
+      throw new Error('yt-dlp not found in bin directory. Please download it first.');
     }
 
     console.log('yt-dlp path:', ytDlpPath);
 
-    // Create a new instance of youtube-dl-exec with the binary path
     const yt = youtubeDl.create(ytDlpPath);
 
-    // Execute the download with the correct options
     await yt(url, {
       extractAudio: true,
       audioFormat: 'mp3',
@@ -96,6 +93,7 @@ const downloadAudio = async (url, outputPath) => {
       noCheckCertificates: true,
       noWarnings: true,
       preferFreeFormats: true,
+      cookiesFromBrowser: 'chrome',  // Add this line
       addHeader: [
         'referer:youtube.com',
         'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
