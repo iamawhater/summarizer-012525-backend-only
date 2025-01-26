@@ -15,7 +15,7 @@ const __dirname = dirname(__filename);
 
 const corsOptions = {
   origin: [
-    process.env.FRONTEND_URL || 'https://summarizer-012525-new-1b9u.vercel.app',
+    process.env.FRONTEND_URL || 'https://summarizer-012525-new-1b9u-h9zw0dctc-iamawhaters-projects.vercel.appz',
     'http://localhost:3000'
   ],
   methods: ['GET', 'POST', 'OPTIONS'],
