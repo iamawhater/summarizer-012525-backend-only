@@ -29,9 +29,6 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors(corsOptions));
-
-//app.use(cors())
-
 app.use(express.json());
 
 // Ensure temp directory exists
@@ -51,7 +48,7 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ 
+const upload = multer({
   storage: storage,
   limits: {
     fileSize: 100 * 1024 * 1024 // 100MB limit
@@ -78,17 +75,12 @@ const cleanup = async (filePath) => {
 // Improved audio download function using youtube-dl-exec
 const downloadAudio = async (url, outputPath) => {
   try {
-    const ytDlpPath = path.join(__dirname, 'bin', 'yt-dlp');
-    //const ytDlpPath = path.join(__dirname, 'bin', 'yt-dlp.exe');
+    const ytDlpPath = path.join(__dirname, 'bin', 'yt-dlp.exe');
     const cookiesPath = path.join(__dirname, 'cookie.txt');
-    
+
     if (!fs.existsSync(ytDlpPath)) {
       throw new Error('yt-dlp not found in bin directory. Please download it first.');
     }
-
-    console.log('yt-dlp path:', ytDlpPath);
-
-    console.log('cookies path:', cookiesPath); // Add this log
 
     const yt = youtubeDl.create(ytDlpPath);
 
@@ -161,13 +153,13 @@ app.post('/api/summarize', async (req, res) => {
     const completion = await openai.chat.completions.create({
       model: "gpt-4",
       messages: [
-        { 
-          role: "system", 
-          content: "You are an expert summarization assistant tasked with providing a top-notch, comprehensive summary of video content. Your summaries are used in high-stakes national-level negotiations, so it is vital to include all important and relevant points. Ensure the summary is clear, concise, and leaves no critical information out. The user should feel confident that they have not missed anything after reading your summary." 
+        {
+          role: "system",
+          content: "You are an expert summarization assistant tasked with providing a top-notch, comprehensive summary of video content. Your summaries are used in high-stakes national-level negotiations, so it is vital to include all important and relevant points. Ensure the summary is clear, concise, and leaves no critical information out. The user should feel confident that they have not missed anything after reading your summary."
         },
-        { 
-          role: "user", 
-          content: `Summarize the following video content in a way that captures all critical details and relevant points. Focus on accuracy, clarity, and completeness. Provide a structured summary with key takeaways, important facts, and actionable insights. Content: ${transcription.text}` 
+        {
+          role: "user",
+          content: `Summarize the following video content in a way that captures all critical details and relevant points. Focus on accuracy, clarity, and completeness. Provide a structured summary with key takeaways, important facts, and actionable insights. Content: ${transcription.text}`
         }
       ],
       temperature: 0.7,
@@ -182,11 +174,54 @@ app.post('/api/summarize', async (req, res) => {
 
   } catch (error) {
     if (audioPath) await cleanup(audioPath);
-    
+
     console.error('Error in /api/summarize:', error);
-    
+
     // Enhanced error response
-    res.status(500).json({ 
+    res.status(500).json({
+      error: error.message,
+      type: error.name,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// New API endpoint for Q/A
+app.post('/api/ask', async (req, res) => {
+  const { question, context } = req.body;
+
+  try {
+    if (!question || !context) {
+      throw new Error('Question and context are required');
+    }
+
+    // Generate answer using GPT-4
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert assistant that provides accurate and detailed answers to questions based on the provided context."
+        },
+        {
+          role: "user",
+          content: `Context: ${context}\n\nQuestion: ${question}\n\nAnswer:`
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 1000
+    });
+
+    const answer = completion.choices[0].message.content;
+
+    // Send response
+    res.json({ answer });
+
+  } catch (error) {
+    console.error('Error in /api/ask:', error);
+
+    // Enhanced error response
+    res.status(500).json({
       error: error.message,
       type: error.name,
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined
@@ -196,7 +231,7 @@ app.post('/api/summarize', async (req, res) => {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.status(200).json({ 
+  res.status(200).json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     tempDirectory: fs.existsSync(tempDir)
