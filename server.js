@@ -31,29 +31,6 @@ const PORT = process.env.PORT || 3001;
 app.use(cors(corsOptions));
 app.use(express.json());
 
-// Ensure JSON responses for API routes
-app.use((req, res, next) => {
-  if (req.path.startsWith('/api/')) {
-    res.setHeader('Content-Type', 'application/json');
-  }
-  next();
-});
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Server Error:', err);
-  
-  // Always return JSON for API routes
-  if (req.path.startsWith('/api/')) {
-    return res.status(500).json({
-      error: err.message || 'Internal server error',
-      type: err.name,
-      details: process.env.NODE_ENV === 'development' ? err.stack : undefined
-    });
-  }
-  next(err);
-});
-
 // Ensure temp directory exists
 const tempDir = './temp';
 if (!fs.existsSync(tempDir)) {
@@ -95,10 +72,10 @@ const cleanup = async (filePath) => {
   }
 };
 
-// Improved audio download function
+// Improved audio download function using youtube-dl-exec
 const downloadAudio = async (url, outputPath) => {
   try {
-    const ytDlpPath = path.join(__dirname, 'bin', 'yt-dlp');
+    const ytDlpPath = path.join(__dirname, 'bin', 'yt-dlp.exe');
     const cookiesPath = path.join(__dirname, 'cookie.txt');
 
     if (!fs.existsSync(ytDlpPath)) {
@@ -131,7 +108,7 @@ const downloadAudio = async (url, outputPath) => {
 
 // Validate YouTube URL
 const isValidYoutubeUrl = (url) => {
-  const pattern = /^(https?:\/\/)?(www\.|m\.)?(youtube\.com|youtu\.be)\/.+$/;
+  const pattern = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+$/;
   return pattern.test(url);
 };
 
@@ -142,11 +119,11 @@ app.post('/api/summarize', async (req, res) => {
 
   try {
     if (!url) {
-      return res.status(400).json({ error: 'URL is required' });
+      throw new Error('URL is required');
     }
 
     if (!isValidYoutubeUrl(url)) {
-      return res.status(400).json({ error: 'Invalid YouTube URL' });
+      throw new Error('Invalid YouTube URL');
     }
 
     // Generate unique filename
@@ -189,15 +166,11 @@ app.post('/api/summarize', async (req, res) => {
       max_tokens: 5000
     });
 
-    if (!completion.choices?.[0]?.message?.content) {
-      throw new Error('Failed to generate summary');
-    }
-
     const summary = completion.choices[0].message.content;
 
     // Cleanup and send response
     await cleanup(audioPath);
-    return res.json({ summary });
+    res.json({ summary });
 
   } catch (error) {
     if (audioPath) await cleanup(audioPath);
@@ -205,32 +178,24 @@ app.post('/api/summarize', async (req, res) => {
     console.error('Error in /api/summarize:', error);
 
     // Enhanced error response
-    return res.status(500).json({
-      error: error.message || 'Failed to summarize video',
+    res.status(500).json({
+      error: error.message,
       type: error.name,
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
 
-// Enhanced Q/A endpoint
+// New API endpoint for Q/A
 app.post('/api/ask', async (req, res) => {
+  const { question, context } = req.body;
+
   try {
-    const { question, context } = req.body;
-
     if (!question || !context) {
-      return res.status(400).json({
-        error: 'Question and context are required'
-      });
+      throw new Error('Question and context are required');
     }
 
-    // Validate input lengths
-    if (question.length > 1000 || context.length > 10000) {
-      return res.status(400).json({
-        error: 'Input exceeds maximum length'
-      });
-    }
-
+    // Generate answer using GPT-4
     const completion = await openai.chat.completions.create({
       model: "gpt-4",
       messages: [
@@ -247,21 +212,17 @@ app.post('/api/ask', async (req, res) => {
       max_tokens: 1000
     });
 
-    if (!completion.choices?.[0]?.message?.content) {
-      return res.status(500).json({
-        error: 'Failed to generate answer'
-      });
-    }
+    const answer = completion.choices[0].message.content;
 
-    return res.json({
-      answer: completion.choices[0].message.content
-    });
+    // Send response
+    res.json({ answer });
 
   } catch (error) {
     console.error('Error in /api/ask:', error);
-    
-    return res.status(500).json({
-      error: error.message || 'Failed to process your question',
+
+    // Enhanced error response
+    res.status(500).json({
+      error: error.message,
       type: error.name,
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
@@ -277,12 +238,9 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Root route
+// Root route (Added)
 app.get('/', (req, res) => {
-  res.json({
-    message: 'Welcome to the backend! Please use /api/summarize to summarize a video.',
-    status: 'running'
-  });
+  res.send('Welcome to the backend! Please use /api/summarize to summarize a video.');
 });
 
 // Start server
