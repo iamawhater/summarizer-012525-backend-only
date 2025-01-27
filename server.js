@@ -159,13 +159,19 @@ app.post('/api/summarize', async (req, res) => {
 
     // Generate summary
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "gpt-4",
       messages: [
-        { role: "system", content: "You are an assistant that summarizes long texts." },
-        { role: "user", content: `Summarize the following content: ${transcription.text}. Give 10 very important bullet points` }
+        { 
+          role: "system", 
+          content: "You are an expert summarization assistant tasked with providing a top-notch, comprehensive summary of video content. Your summaries are used in high-stakes national-level negotiations, so it is vital to include all important and relevant points. Ensure the summary is clear, concise, and leaves no critical information out. The user should feel confident that they have not missed anything after reading your summary." 
+        },
+        { 
+          role: "user", 
+          content: `Summarize the following video content in a way that captures all critical details and relevant points. Focus on accuracy, clarity, and completeness. Provide a structured summary with key takeaways, important facts, and actionable insights. Content: ${transcription.text}` 
+        }
       ],
       temperature: 0.7,
-      max_tokens: 1000
+      max_tokens: 5000
     });
 
     const summary = completion.choices[0].message.content;
