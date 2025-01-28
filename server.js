@@ -75,7 +75,7 @@ const cleanup = async (filePath) => {
 // Improved audio download function using youtube-dl-exec
 const downloadAudio = async (url, outputPath) => {
   try {
-    const ytDlpPath = path.join(__dirname, 'bin', 'yt-dlp.exe');
+    const ytDlpPath = path.join(__dirname, 'bin', 'yt-dlp');
     const cookiesPath = path.join(__dirname, 'cookie.txt');
 
     if (!fs.existsSync(ytDlpPath)) {
