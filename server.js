@@ -108,8 +108,43 @@ const downloadAudio = async (url, outputPath) => {
 
 // Validate YouTube URL
 const isValidYoutubeUrl = (url) => {
-  const pattern = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+$/;
-  return pattern.test(url);
+  try {
+    // Handle cases where the URL might not have a protocol
+    let workingUrl = url;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      workingUrl = 'https://' + url;
+    }
+
+    const urlObj = new URL(workingUrl);
+    const hostname = urlObj.hostname.toLowerCase();
+
+    // Check if it's a valid YouTube domain
+    if (!['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be'].includes(hostname)) {
+      return false;
+    }
+
+    // Extract video ID from query parameters for standard and mobile URLs
+    const searchParams = urlObj.searchParams;
+    const videoId = searchParams.get('v');
+
+    // If we have a valid video ID from query parameters, it's valid
+    if (videoId) {
+      return true;
+    }
+
+    // Check for other valid path patterns
+    const validPaths = ['/watch', '/shorts', '/v/', '/embed/'];
+    const path = urlObj.pathname.toLowerCase();
+
+    // Special case for youtu.be
+    if (hostname === 'youtu.be' && path.length > 1) {
+      return true;
+    }
+
+    return validPaths.some(validPath => path.startsWith(validPath));
+  } catch {
+    return false;
+  }
 };
 
 // Main API endpoint for video summarization
