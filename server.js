@@ -75,7 +75,7 @@ const cleanup = async (filePath) => {
 // Improved audio download function using youtube-dl-exec
 const downloadAudio = async (url, outputPath) => {
   try {
-    const ytDlpPath = path.join(__dirname, 'bin', 'yt-dlp');
+    const ytDlpPath = path.join(__dirname, 'bin', 'yt-dlp.exe');
     const cookiesPath = path.join(__dirname, 'cookie.txt');
 
     if (!fs.existsSync(ytDlpPath)) {
@@ -107,28 +107,9 @@ const downloadAudio = async (url, outputPath) => {
 };
 
 // Validate YouTube URL
-const isValidYouTubeUrl = (url: string): boolean => {
-  try {
-    new URL(url);
-  } catch {
-    try {
-      new URL(`https://${url}`);
-    } catch {
-      return false;
-    }
-  }
-  
-  const normalizedUrl = url.toLowerCase();
-  const validPatterns = [
-    'youtube.com/watch',
-    'youtube.com/shorts',
-    'youtu.be/',
-    'm.youtube.com',
-    'youtube.com/v/',
-    'youtube.com/embed/'
-  ];
-  
-  return validPatterns.some(pattern => normalizedUrl.includes(pattern));
+const isValidYoutubeUrl = (url) => {
+  const pattern = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+$/;
+  return pattern.test(url);
 };
 
 // Main API endpoint for video summarization
