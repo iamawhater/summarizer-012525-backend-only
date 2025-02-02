@@ -193,8 +193,11 @@ const isValidYoutubeUrl = (url) => {
 const transcribeWithWhisper = async (audioPath) => {
   return new Promise((resolve, reject) => {
     console.log('Starting transcription with local Whisper...');
+
+    // Update the path to whisper executable in the virtual environment
+    const whisperPath = path.join(__dirname, 'venv/bin/whisper');
     
-    const whisper = spawn('whisper', [
+    const whisper = spawn(whisperPath, [
       audioPath,
       '--model', 'tiny',
       '--output_dir', tempDir,
@@ -368,46 +371,6 @@ app.post('/api/summarize', async (req, res) => {
   }
 });
 
-    // Generate summary
-    const completion = await openai.chat.completions.create({
-      model: "babbage-002",
-      messages: [
-        {
-          role: "system",
-          content: "You are an expert summarization assistant tasked with providing a top-notch, comprehensive summary of video content. Your summaries are used in high-stakes national-level negotiations, so it is vital to include all important and relevant points. Ensure the summary is clear, concise, and leaves no critical information out. The user should feel confident that they have not missed anything after reading your summary."
-        },
-        {
-          role: "user",
-          content: `Summarize the following video content in a way that captures all critical details and relevant points. Focus on accuracy, clarity, and completeness. Provide a structured summary with key takeaways, important facts, and actionable insights. Content: ${tr}`
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 2000
-    });
-
-    const summary = completion.choices[0].message.content;
-
-    // Cleanup
-    await cleanup(audioPath);
-    if (compressedAudioPath) {
-      await cleanup(compressedAudioPath);
-    }
-
-    res.json({ summary });
-
-  } catch (error) {
-    // Cleanup on error
-    if (audioPath) await cleanup(audioPath);
-    if (compressedAudioPath) await cleanup(compressedAudioPath);
-
-    console.error('Error in /api/summarize:', error);
-    res.status(500).json({
-      error: error.message,
-      type: error.name,
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
-  }
-});
 // New API endpoint for Q/A
 app.post('/api/ask', async (req, res) => {
   const { question, context } = req.body;
