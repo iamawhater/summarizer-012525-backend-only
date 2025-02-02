@@ -190,6 +190,46 @@ const isValidYoutubeUrl = (url) => {
   }
 };
 
+const transcribeWithWhisper = async (audioPath) => {
+  return new Promise((resolve, reject) => {
+    console.log('Starting transcription with local Whisper...');
+    
+    const whisper = spawn('whisper', [
+      audioPath,
+      '--model', 'tiny',
+      '--output_dir', tempDir,
+      '--output_format', 'txt'
+    ]);
+
+    let errorOutput = '';
+
+    whisper.stderr.on('data', (data) => {
+      console.log(`Whisper stderr: ${data}`);
+      errorOutput += data.toString();
+    });
+
+    whisper.on('close', async (code) => {
+      if (code === 0) {
+        try {
+          // Whisper saves the transcript with the same name as input file but .txt extension
+          const txtPath = audioPath.replace(/\.[^/.]+$/, '.txt');
+          const text = await fs.promises.readFile(txtPath, 'utf8');
+          await cleanup(txtPath); // Clean up the transcript file
+          resolve({ text });
+        } catch (error) {
+          reject(new Error(`Failed to read transcript: ${error.message}`));
+        }
+      } else {
+        reject(new Error(`Whisper process failed with code ${code}: ${errorOutput}`));
+      }
+    });
+
+    whisper.on('error', (err) => {
+      reject(new Error(`Failed to start Whisper process: ${err.message}`));
+    });
+  });
+};
+
 // Main API endpoint for video summarization
 app.post('/api/summarize', async (req, res) => {
   const { url } = req.body;
@@ -221,7 +261,7 @@ app.post('/api/summarize', async (req, res) => {
     // Compress the audio file
     compressedAudioPath = await compressAudio(audioPath);
 
-    // Transcribe compressed audio
+    /* //Transcribe compressed audio using Whisper-1 API //
     const transcription = await openai.audio.transcriptions.create({
       file: fs.createReadStream(compressedAudioPath),
       model: "whisper-1",
@@ -230,10 +270,107 @@ app.post('/api/summarize', async (req, res) => {
     if (!transcription || !transcription.text) {
       throw new Error('Failed to transcribe audio');
     }
+    */
+
+    const transcription = await transcribeWithWhisper(compressedAudioPath);
+
+    if (!transcription || !transcription.text) {
+      throw new Error('Failed to transcribe audio');
+    }
+
+    // Split transcription into manageable chunks
+    const MAX_CHUNK_LENGTH = 4000;
+    const chunks = [];
+    let currentChunk = '';
+    const words = transcription.text.split(' ');
+    
+    for (const word of words) {
+      if ((currentChunk + ' ' + word).length > MAX_CHUNK_LENGTH) {
+        chunks.push(currentChunk);
+        currentChunk = word;
+      } else {
+        currentChunk = currentChunk ? currentChunk + ' ' + word : word;
+      }
+    }
+    if (currentChunk) {
+      chunks.push(currentChunk);
+    }
+
+    // Process each chunk
+    const chunkSummaries = [];
+    for (const chunk of chunks) {
+      const chunkCompletion = await openai.chat.completions.create({
+        model: "babbage-002",
+        messages: [
+          {
+            role: "system",
+            content: "Summarize this portion of the video transcript concisely while preserving key information."
+          },
+          {
+            role: "user",
+            content: chunk
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 1000
+      });
+      chunkSummaries.push(chunkCompletion.choices[0].message.content);
+    }
+
+    // Generate final summary from chunk summaries
+    const completion = await openai.chat.completions.create({
+      model: "babbage-002",
+      messages: [
+        {
+          role: "system",
+          content: "Create a coherent, comprehensive summary from these partial summaries, maintaining all key points and insights."
+        },
+        {
+          role: "user",
+          content: `Combine these summaries into a single coherent summary that captures all critical details and relevant points: \n\n${chunkSummaries.join('\n\n')}`
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 2000
+    });
+
+    const summary = completion.choices[0].message.content;
+
+    // Cleanup
+    await cleanup(audioPath);
+    if (compressedAudioPath) {
+      await cleanup(compressedAudioPath);
+    }
+
+    res.json({ summary });
+
+  } catch (error) {
+    // Cleanup on error
+    if (audioPath) await cleanup(audioPath);
+    if (compressedAudioPath) await cleanup(compressedAudioPath);
+
+    console.error('Error in /api/summarize:', error);
+
+    // Enhanced error response with Whisper-specific handling
+    if (error.message.includes('whisper')) {
+      return res.status(500).json({
+        error: 'Transcription failed. Please try again.',
+        type: 'WhisperError',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+
+    res.status(500).json({
+      error: error.message,
+      type: error.name,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
 
     // Generate summary
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "babbage-002",
       messages: [
         {
           role: "system",
@@ -241,11 +378,11 @@ app.post('/api/summarize', async (req, res) => {
         },
         {
           role: "user",
-          content: `Summarize the following video content in a way that captures all critical details and relevant points. Focus on accuracy, clarity, and completeness. Provide a structured summary with key takeaways, important facts, and actionable insights. Content: ${transcription.text}`
+          content: `Summarize the following video content in a way that captures all critical details and relevant points. Focus on accuracy, clarity, and completeness. Provide a structured summary with key takeaways, important facts, and actionable insights. Content: ${tr}`
         }
       ],
       temperature: 0.7,
-      max_tokens: 5000
+      max_tokens: 2000
     });
 
     const summary = completion.choices[0].message.content;
@@ -282,7 +419,7 @@ app.post('/api/ask', async (req, res) => {
 
     // Generate answer using GPT-4
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "babbage-002",
       messages: [
         {
           role: "system",
