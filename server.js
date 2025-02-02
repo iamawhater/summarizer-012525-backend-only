@@ -118,7 +118,7 @@ const cleanup = async (filePath) => {
 const downloadAudio = async (url, outputPath) => {
   try {
     const ytDlpPath = path.join(__dirname, 'bin', 'yt-dlp');
-    //const ytDlpPath = path.join(__dirname, 'bin', 'yt-dlp.exe');
+    //const ytDlpPath = path.join(__dirname, 'bin', 'yt-dlp.exe'); // ✅ only for windows
     const cookiesPath = path.join(__dirname, 'cookie.txt');
 
     if (!fs.existsSync(ytDlpPath)) {
@@ -196,13 +196,14 @@ const transcribeWithWhisper = async (audioPath) => {
 
     // Update the path to whisper executable in the virtual environment
     const whisperPath = path.join(__dirname, 'venv/bin/whisper');
+    //const whisperPath = 'whisper'; //✅for windows local implementaion only
     
     const whisper = spawn(whisperPath, [
       audioPath,
       '--model', 'tiny',
       '--output_dir', tempDir,
       '--output_format', 'txt'
-    ]);
+    ]); //, { shell: true }); // ✅only for windows Enable shell for Windows to find whisper 
 
     let errorOutput = '';
 
@@ -229,6 +230,7 @@ const transcribeWithWhisper = async (audioPath) => {
 
     whisper.on('error', (err) => {
       reject(new Error(`Failed to start Whisper process: ${err.message}`));
+  
     });
   });
 };
@@ -300,10 +302,12 @@ app.post('/api/summarize', async (req, res) => {
     }
 
     // Process each chunk
+
+
     const chunkSummaries = [];
     for (const chunk of chunks) {
-      const chunkCompletion = await openai.chat.completions.create({
-        model: "babbage-002",
+      const chunkCompletion = await openai. chat.completions.create({
+        model: "gpt-3.5-turbo",
         messages: [
           {
             role: "system",
@@ -318,11 +322,13 @@ app.post('/api/summarize', async (req, res) => {
         max_tokens: 1000
       });
       chunkSummaries.push(chunkCompletion.choices[0].message.content);
-    }
+
 
     // Generate final summary from chunk summaries
+
+    }
     const completion = await openai.chat.completions.create({
-      model: "babbage-002",
+      model: "gpt-3.5-turbo",
       messages: [
         {
           role: "system",
@@ -334,10 +340,11 @@ app.post('/api/summarize', async (req, res) => {
         }
       ],
       temperature: 0.7,
-      max_tokens: 2000
+      max_tokens: 2500
     });
 
     const summary = completion.choices[0].message.content;
+    
 
     // Cleanup
     await cleanup(audioPath);
@@ -382,7 +389,7 @@ app.post('/api/ask', async (req, res) => {
 
     // Generate answer using GPT-4
     const completion = await openai.chat.completions.create({
-      model: "babbage-002",
+      model: "gpt-3.5-turbo",
       messages: [
         {
           role: "system",
@@ -394,7 +401,7 @@ app.post('/api/ask', async (req, res) => {
         }
       ],
       temperature: 0.7,
-      max_tokens: 1000
+      max_tokens: 500
     });
 
     const answer = completion.choices[0].message.content;
