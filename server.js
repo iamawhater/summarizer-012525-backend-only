@@ -198,7 +198,7 @@ app.post('/api/summarize', async (req, res) => {
         }
       ],
       temperature: 0.7,
-      max_tokens: 5000
+      max_tokens: 4000
     });
 
     const summary = completion.choices[0].message.content;
