@@ -190,6 +190,7 @@ const isValidYoutubeUrl = (url) => {
   }
 };
 
+/* for locally running whisper
 const transcribeWithWhisper = async (audioPath) => {
   return new Promise((resolve, reject) => {
     console.log('=== Starting Whisper Transcription ===');
@@ -309,6 +310,7 @@ const transcribeWithWhisper = async (audioPath) => {
     });
   });
 };
+*/
 
 // Main API endpoint for video summarization
 app.post('/api/summarize', async (req, res) => {
@@ -341,7 +343,7 @@ app.post('/api/summarize', async (req, res) => {
     // Compress the audio file
     compressedAudioPath = await compressAudio(audioPath);
 
-    /* //Transcribe compressed audio using Whisper-1 API //
+    //Transcribe compressed audio using Whisper-1 API //
     const transcription = await openai.audio.transcriptions.create({
       file: fs.createReadStream(compressedAudioPath),
       model: "whisper-1",
@@ -352,11 +354,11 @@ app.post('/api/summarize', async (req, res) => {
     }
     */
 
-    const transcription = await transcribeWithWhisper(compressedAudioPath);
+    /* const transcription = await transcribeWithWhisper(compressedAudioPath);
 
     if (!transcription || !transcription.text) {
       throw new Error('Failed to transcribe audio');
-    }
+    }  for locally running whisper*/
 
     // Split transcription into manageable chunks
     const MAX_CHUNK_LENGTH = 4000;
