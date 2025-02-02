@@ -186,7 +186,7 @@ app.post('/api/summarize', async (req, res) => {
 
     // Generate summary
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-3.5-turbo-0125",
       messages: [
         {
           role: "system",
@@ -232,7 +232,7 @@ app.post('/api/ask', async (req, res) => {
 
     // Generate answer using GPT-4
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-3.5-turbo-0125",
       messages: [
         {
           role: "system",
