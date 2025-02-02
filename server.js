@@ -9,6 +9,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { spawn } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -55,6 +56,47 @@ const upload = multer({
   }
 });
 
+/// 012925 new feature; compress audio using ffmpeg
+/// SOURCE OPENAI COMMUNITY: SUGGESTED THIS CODE TO MAKE AUDIO FILE SMALLER ffmpeg -i audio.mp3 -vn -map_metadata -1 -ac 1 -c:a libopus -b:a 12k -application voip audio.ogg
+
+const compressAudio = async (inputPath) => {
+  try {
+    const outputPath = `${inputPath.slice(0, -4)}_compressed.ogg`; // Change extension to .ogg
+    
+    return new Promise((resolve, reject) => {
+      const ffmpeg = spawn('ffmpeg', [
+        '-i', inputPath,          // Input file
+        '-vn',                    // No video
+        '-map_metadata', '-1',    // Remove metadata
+        '-ac', '1',               // Mono audio
+        '-c:a', 'libopus',       // Use Opus codec
+        '-b:a', '12k',           // 12kbps bitrate
+        '-application', 'voip',   // VOIP optimization
+        outputPath               // Output file
+      ]);
+
+      ffmpeg.stderr.on('data', (data) => {
+        console.log(`FFmpeg stderr: ${data}`);
+      });
+
+      ffmpeg.on('close', (code) => {
+        if (code === 0) {
+          resolve(outputPath);
+        } else {
+          reject(new Error(`FFmpeg process exited with code ${code}`));
+        }
+      });
+
+      ffmpeg.on('error', (err) => {
+        reject(new Error(`FFmpeg process error: ${err.message}`));
+      });
+    });
+  } catch (error) {
+    console.error('Error in compressAudio:', error);
+    throw error;
+  }
+};
+
 // Initialize OpenAI
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -75,7 +117,8 @@ const cleanup = async (filePath) => {
 // Improved audio download function using youtube-dl-exec
 const downloadAudio = async (url, outputPath) => {
   try {
-    const ytDlpPath = path.join(__dirname, 'bin', 'yt-dlp');
+    //const ytDlpPath = path.join(__dirname, 'bin', 'yt-dlp');
+    const ytDlpPath = path.join(__dirname, 'bin', 'yt-dlp.exe');
     const cookiesPath = path.join(__dirname, 'cookie.txt');
 
     if (!fs.existsSync(ytDlpPath)) {
@@ -151,6 +194,7 @@ const isValidYoutubeUrl = (url) => {
 app.post('/api/summarize', async (req, res) => {
   const { url } = req.body;
   let audioPath = null;
+  let compressedAudioPath = null;
 
   try {
     if (!url) {
@@ -165,7 +209,7 @@ app.post('/api/summarize', async (req, res) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     audioPath = path.join(tempDir, `audio-${uniqueSuffix}.mp3`);
 
-    // Download audio with improved error handling
+    // Download audio
     await downloadAudio(url, audioPath);
 
     // Verify file exists and has size
@@ -174,9 +218,12 @@ app.post('/api/summarize', async (req, res) => {
       throw new Error('Downloaded audio file is empty');
     }
 
-    // Transcribe audio
+    // Compress the audio file
+    compressedAudioPath = await compressAudio(audioPath);
+
+    // Transcribe compressed audio
     const transcription = await openai.audio.transcriptions.create({
-      file: fs.createReadStream(audioPath),
+      file: fs.createReadStream(compressedAudioPath),
       model: "whisper-1",
     });
 
@@ -186,7 +233,7 @@ app.post('/api/summarize', async (req, res) => {
 
     // Generate summary
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo-0125",
+      model: "gpt-4",
       messages: [
         {
           role: "system",
@@ -198,21 +245,25 @@ app.post('/api/summarize', async (req, res) => {
         }
       ],
       temperature: 0.7,
-      max_tokens: 4000
+      max_tokens: 5000
     });
 
     const summary = completion.choices[0].message.content;
 
-    // Cleanup and send response
+    // Cleanup
     await cleanup(audioPath);
+    if (compressedAudioPath) {
+      await cleanup(compressedAudioPath);
+    }
+
     res.json({ summary });
 
   } catch (error) {
+    // Cleanup on error
     if (audioPath) await cleanup(audioPath);
+    if (compressedAudioPath) await cleanup(compressedAudioPath);
 
     console.error('Error in /api/summarize:', error);
-
-    // Enhanced error response
     res.status(500).json({
       error: error.message,
       type: error.name,
@@ -220,7 +271,6 @@ app.post('/api/summarize', async (req, res) => {
     });
   }
 });
-
 // New API endpoint for Q/A
 app.post('/api/ask', async (req, res) => {
   const { question, context } = req.body;
@@ -232,7 +282,7 @@ app.post('/api/ask', async (req, res) => {
 
     // Generate answer using GPT-4
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo-0125",
+      model: "gpt-4",
       messages: [
         {
           role: "system",
