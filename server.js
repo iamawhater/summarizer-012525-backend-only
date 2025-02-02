@@ -192,11 +192,32 @@ const isValidYoutubeUrl = (url) => {
 
 const transcribeWithWhisper = async (audioPath) => {
   return new Promise((resolve, reject) => {
-    console.log('Starting transcription with local Whisper...');
+    console.log('=== Starting Whisper Transcription ===');
+    console.log('Working directory:', process.cwd());
     console.log('Audio path:', audioPath);
     
+    // Detailed file check
+    try {
+      const stats = fs.statSync(audioPath);
+      console.log('Audio file details:', {
+        exists: true,
+        size: stats.size,
+        mode: stats.mode,
+        created: stats.birthtime,
+        modified: stats.mtime
+      });
+      
+      // Check if file is readable
+      fs.accessSync(audioPath, fs.constants.R_OK);
+      console.log('File is readable');
+    } catch (error) {
+      console.error('Audio file check failed:', error);
+      reject(new Error(`Audio file verification failed: ${error.message}`));
+      return;
+    }
+    
     const whisperPath = path.join(__dirname, 'venv/bin/whisper');
-    console.log('Whisper path:', whisperPath);
+    console.log('Whisper executable path:', whisperPath);
     
     let errorOutput = '';
     let stdoutOutput = '';
@@ -205,65 +226,85 @@ const transcribeWithWhisper = async (audioPath) => {
       audioPath,
       '--model', 'tiny',
       '--output_dir', tempDir,
-      '--output_format', 'txt',
-      '--fp16', 'False',  // Explicitly disable FP16
-      '--language', 'en'  // Optional: specify language if known
+      '--output_format', 'all',  // Get all formats including timestamps
+      '--language', 'en',
+      '--verbose', 'True'       // Get more detailed output
     ]);
 
-    if (whisper.stderr) {
-      whisper.stderr.on('data', (data) => {
-        const message = data.toString();
-        console.log(`Whisper stderr: ${message}`);
-        errorOutput += message;
-      });
-    }
+    whisper.stderr.on('data', (data) => {
+      const message = data.toString();
+      console.log(`[Whisper stderr] ${message}`);
+      errorOutput += message;
+    });
 
-    if (whisper.stdout) {
-      whisper.stdout.on('data', (data) => {
-        const message = data.toString();
-        console.log(`Whisper stdout: ${message}`);
-        stdoutOutput += message;
-      });
-    }
+    whisper.stdout.on('data', (data) => {
+      const message = data.toString();
+      console.log(`[Whisper stdout] ${message}`);
+      stdoutOutput += message;
+    });
 
     whisper.on('close', async (code) => {
-      console.log(`Whisper process exited with code: ${code}`);
-      console.log('Final stdout:', stdoutOutput);
-      console.log('Final stderr:', errorOutput);
+      console.log('=== Whisper Process Completed ===');
+      console.log(`Exit code: ${code}`);
+      console.log('Output directory contents:');
+      try {
+        const files = fs.readdirSync(tempDir);
+        console.log(files);
+      } catch (error) {
+        console.error('Error listing temp directory:', error);
+      }
       
       if (code === 0) {
         try {
+          // Check for both txt and json outputs
           const txtPath = audioPath.replace(/\.[^/.]+$/, '.txt');
-          console.log('Looking for transcript at:', txtPath);
+          const jsonPath = audioPath.replace(/\.[^/.]+$/, '.json');
           
-          if (!fs.existsSync(txtPath)) {
-            console.log('Transcript file does not exist');
-            reject(new Error('Transcript file was not created'));
-            return;
+          console.log('Looking for output files:', {
+            txt: txtPath,
+            json: jsonPath
+          });
+          
+          const txtExists = fs.existsSync(txtPath);
+          const jsonExists = fs.existsSync(jsonPath);
+          
+          console.log('File existence check:', {
+            txt: txtExists,
+            json: jsonExists
+          });
+          
+          if (!txtExists) {
+            throw new Error('Transcript file not found');
           }
           
           const text = await fs.promises.readFile(txtPath, 'utf8');
-          console.log('Transcript content length:', text.length);
+          console.log('Transcript size:', text.length, 'characters');
+          
+          let segments = [];
+          if (jsonExists) {
+            const jsonContent = await fs.promises.readFile(jsonPath, 'utf8');
+            segments = JSON.parse(jsonContent).segments;
+            console.log('Found', segments.length, 'segments in JSON');
+          }
+          
+          // Cleanup
           await cleanup(txtPath);
-          resolve({ text });
+          if (jsonExists) await cleanup(jsonPath);
+          
+          resolve({ text, segments });
         } catch (error) {
-          console.log('Error reading transcript:', error);
-          reject(new Error(`Failed to read transcript: ${error.message}`));
+          console.error('Error processing transcript:', error);
+          reject(new Error(`Failed to process transcript: ${error.message}`));
         }
       } else {
-        reject(new Error(`Whisper process failed with code ${code}: ${errorOutput}`));
+        const errorMessage = `Whisper process failed with code ${code}.\nStdout: ${stdoutOutput}\nStderr: ${errorOutput}`;
+        console.error(errorMessage);
+        reject(new Error(errorMessage));
       }
     });
 
     whisper.on('error', (err) => {
-      console.log('Whisper spawn error:', err);
-      reject(new Error(`Failed to start Whisper process: ${err.message}`));
-    });
-  });
-};
-
-    whisper.on('error', (err) => {
-      console.log('Whisper spawn error:', err);  // Add this
+      console.error('Whisper process spawn error:', err);
       reject(new Error(`Failed to start Whisper process: ${err.message}`));
     });
   });
